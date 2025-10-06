@@ -3,17 +3,11 @@
 # args:
 # - image: the image to build the ISO from
 # - config: the config.yaml file to use
-# - build: the build directory to use
-# - docker_sock: the docker socket to use
-# - auroraboot: the auroraboot image to use
-# - --extend: optional flag to extend the ISO with LocalAI model files
 
 set -e  # Exit on any error
 
 IMAGE=$1
 CONFIG=$2
-EXTEND_FLAG=$3
-
 # Validate arguments
 if [ -z "$IMAGE" ]; then
     echo "Error: IMAGE argument is required"
@@ -63,25 +57,4 @@ podman run -v "$CONFIG_ABS":/config.yaml:Z \
              --set "disable_netboot=true" \
              --cloud-config /config.yaml \
              --set "state_dir=/tmp/auroraboot"
-
-# Check if we should extend the ISO with LocalAI model files
-if [ "$EXTEND_FLAG" = "--extend" ]; then
-    echo ""
-    echo "Extending ISO with LocalAI model files..."
-    
-    # Find the most recent ISO in the build directory
-    LATEST_ISO=$(find build/ -name "*.iso" -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2-)
-    
-    if [ -z "$LATEST_ISO" ]; then
-        echo "Error: No ISO file found in build directory"
-        exit 1
-    fi
-    
-    echo "Found ISO: $LATEST_ISO"
-    
-    # Run the extend-iso script
-    ./extend-iso.sh "$LATEST_ISO"
-    
-    echo "ISO extension completed successfully!"
-fi
 
