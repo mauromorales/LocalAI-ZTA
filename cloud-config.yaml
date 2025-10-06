@@ -1,0 +1,52 @@
+#cloud-config
+
+hostname: "localai"
+
+install:
+  auto: true
+  reboot: true
+  device: auto
+  grub_options:
+    default_menu_entry: "LocalAI"
+
+bind_mounts:
+  - /usr/local/.state/usr-share-local-ai-models.bind:/usr/share/local-ai/models
+  - /usr/local/.state/usr-share-local-ai-backends.bind:/usr/share/local-ai/backends
+
+users:
+  - name: "admin"
+    groups: ["admin"]
+    passwd: "admin"
+
+stages:
+  initramfs:
+    - name: "Enable mDNS services to advertise hostname on local network"
+      systemctl:
+        enable:
+          - avahi-daemon
+          - local-ai
+    - name: "Give ownership of models and backends to local-ai user"
+      commands:
+        - |
+          chown -R local-ai:local-ai /usr/share/local-ai/* 2>/dev/null || true
+  rootfs:
+    - name: "LocalAI persistent mounts"
+      environment_file: /run/cos/cos-layout.env
+      environment:
+        CUSTOM_BIND_MOUNTS: "/usr/share/local-ai/models /usr/share/local-ai/backends"
+
+  after-install:
+    - name: "Copy LocalAI data to persistent partition"
+      commands:
+        - |
+          if mount | grep /usr/local >/dev/null; then umount /usr/local; fi
+          mount LABEL=COS_PERSISTENT /usr/local || mount $(findfs LABEL=COS_PERSISTENT) /usr/local
+          mkdir -p /usr/local/.state/usr-share-local-ai-models.bind
+          mkdir -p /usr/local/.state/usr-share-local-ai-backends.bind
+          [ -d /run/initramfs/live/usr/share/local-ai/models ] && \
+            cp -rf /run/initramfs/live/usr/share/local-ai/models/* \
+                   /usr/local/.state/usr-share-local-ai-models.bind/
+          [ -d /run/initramfs/live/usr/share/local-ai/backends ] && \
+            cp -rf /run/initramfs/live/usr/share/local-ai/backends/* \
+                   /usr/local/.state/usr-share-local-ai-backends.bind/
+          umount /usr/local
