@@ -11,7 +11,7 @@ permissions:
   id-token: write
   actions: read
 jobs:
-  localai-zta-base:
+  base-image:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -36,7 +36,7 @@ jobs:
 
   localai-zta:
     name: Kairos Factory
-    needs: localai-zta-base
+    needs: base-image
     uses: kairos-io/kairos-factory-action/.github/workflows/reusable-factory.yaml@v0.0.8
     secrets:
       registry_username: ${{ secrets.REGISTRY_USERNAME }}
