@@ -12,7 +12,7 @@ permissions:
   id-token: write
   actions: read
 jobs:
-  noos-base:
+  localai-zta-base:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -35,9 +35,9 @@ jobs:
           tags: quay.io/mauromorales/localai-zta:base-${{ github.sha }}
           labels: "quay.expires-after=2d"
           push: true
-  noos:
+  localai-zta:
     name: Kairos Factory
-    needs: noos-base
+    needs: localai-zta-base
     uses: kairos-io/kairos-factory-action/.github/workflows/reusable-factory.yaml@v0.0.8
     secrets:
       registry_username: ${{ secrets.REGISTRY_USERNAME }}
@@ -46,7 +46,7 @@ jobs:
       base_image: quay.io/mauromorales/localai-zta:${{ github.sha }}
       model: "generic"
       arch: "amd64"
-      version: "auto"
+      version: "v0.0.1"
       iso: true
       grype: true
       registry_domain: "quay.io"
