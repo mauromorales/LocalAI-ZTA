@@ -58,15 +58,23 @@ Building an appliance is done fully with [Kairos](https://kairos.io), which mean
 
 ### 1. Build an OCI image
 
-First we need a container image, which will be used to create the installation artifacts. Create one by running:
+First we need a container image, which will be used to create the installation artifacts. The build process uses a two-stage approach:
+
+1. **Stage 1**: Builds the LocalAI base image with the LocalAI binary and dependencies
+2. **Stage 2**: Adds Kairos integration, systemd service configuration, and user setup
+
+Create the image by running:
 
 ```bash
-./scripts/build-oci.sh [REPOSITORY] [VERSION] [--push]
+./scripts/build-oci.sh [--push]
 ```
 
-**Parameters:**
+**Environment Variables:**
 - `REPOSITORY`: Repository name (default: `localai-zta`)
-- `VERSION`: Version tag for the image (optional, defaults to latest LocalAI release)
+- `ARTIFACT_VERSION`: Version tag for the final image (optional, defaults to latest LocalAI release)
+- `LOCALAI_VERSION`: LocalAI version to use (optional, defaults to latest LocalAI release)
+
+**Options:**
 - `--push`: Push the built image to the repository (optional)
 
 **Examples:**
@@ -76,16 +84,19 @@ First we need a container image, which will be used to create the installation a
 ./scripts/build-oci.sh
 
 # Build with custom repository, latest version
-./scripts/build-oci.sh quay.io/mauromorales/localai-zta
+REPOSITORY=quay.io/mauromorales/localai-zta ./scripts/build-oci.sh
 
-# Build with custom repository and specific version
-./scripts/build-oci.sh quay.io/mauromorales/localai-zta v3.6.0
+# Build with custom repository and artifact version
+REPOSITORY=quay.io/mauromorales/localai-zta ARTIFACT_VERSION=v1.0.0 ./scripts/build-oci.sh
+
+# Build with custom artifact version and specific LocalAI version
+REPOSITORY=quay.io/mauromorales/localai-zta ARTIFACT_VERSION=v1.0.0 LOCALAI_VERSION=v3.6.0 ./scripts/build-oci.sh
 
 # Build and push to custom repository
-./scripts/build-oci.sh quay.io/mauromorales/localai-zta v3.6.0 --push
+REPOSITORY=quay.io/mauromorales/localai-zta ARTIFACT_VERSION=v1.0.0 ./scripts/build-oci.sh --push
 ```
 
-This will produce the image: `quay.io/mauromorales/localai-zta:v3.6.0` which we will need in the next step.
+This will produce the image: `quay.io/mauromorales/localai-zta:v1.0.0` which we will need in the next step.
 
 ### 2. Build an ISO
 
@@ -102,7 +113,7 @@ An ISO can be created using the following script. You need to pass the previousl
 **Example:**
 
 ```bash
-./scripts/build-iso.sh quay.io/mauromorales/localai-zta:v3.6.0 ./cloud-config.yaml
+./scripts/build-iso.sh quay.io/mauromorales/localai-zta:v1.0.0 ./cloud-config.yaml
 ```
 
 At this point you need to decide whether you want to add some models and backends to the ISO so they are available in the appliance. This is a good option if your device will not have a good network connection. If you don't need to, then you can simply jump to the flashing a USB step.
@@ -312,22 +323,29 @@ LocalAI-ZTA/
 │   ├── cpu-llama-cpp/          # CPU-optimized LlamaCPP backend
 │   └── llama-cpp/              # Standard LlamaCPP backend
 ├── build/                      # Build artifacts (ISOs, etc.)
+├── images/                     # Docker build stages
+│   ├── stage-1/               # Stage 1: LocalAI base image
+│   │   └── Dockerfile         # LocalAI binary and dependencies
+│   └── stage-2/               # Stage 2: Kairos integration
+│       └── Dockerfile         # Systemd service and user setup
 ├── models/                     # AI model files
 ├── scripts/                    # Build and utility scripts
-│   ├── build-oci.sh           # OCI image builder
+│   ├── build-oci.sh           # Two-stage OCI image builder
 │   ├── build-iso.sh           # ISO builder
 │   └── extend-iso.sh          # ISO extender for models/backends
 ├── cloud-config.yaml          # Kairos configuration
-├── Dockerfile                 # Container image definition
+├── Dockerfile                 # Main Dockerfile (combines both stages)
 ├── README.md                  # This file
 └── LICENSE                    # Project license
 ```
 
 ### Key Files
 
-- **`Dockerfile`**: Defines the container image with LocalAI and Kairos integration
+- **`Dockerfile`**: Main Dockerfile that combines both build stages
+- **`images/stage-1/Dockerfile`**: Stage 1 - LocalAI base image with binary and dependencies
+- **`images/stage-2/Dockerfile`**: Stage 2 - Kairos integration, systemd service, and user setup
 - **`cloud-config.yaml`**: Kairos configuration for system setup and LocalAI service
-- **`scripts/build-oci.sh`**: Builds the OCI container image with LocalAI
+- **`scripts/build-oci.sh`**: Builds the OCI container image using two-stage approach
 - **`scripts/build-iso.sh`**: Creates bootable ISO from the OCI image
 - **`scripts/extend-iso.sh`**: Adds models and backends to an existing ISO
 - **`models/`**: Directory for AI model files (GGUF format)
