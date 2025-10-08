@@ -89,7 +89,7 @@ jobs:
             VARIANT=standard
   standard-stage-2:
     name: Kairos Factory
-    needs: core-stage-1
+    needs: standard-stage-1
     uses: kairos-io/kairos-factory-action/.github/workflows/reusable-factory.yaml@v0.0.8
     secrets:
       registry_username: ${{ secrets.REGISTRY_USERNAME }}
