@@ -1,17 +1,24 @@
 ARG BASE_IMAGE
 ARG KAIROS_INIT=v0.5.20
+ARG VARIANT=core
 
 FROM quay.io/kairos/kairos-init:${KAIROS_INIT} AS kairos-init
 
-FROM ${BASE_IMAGE}
-ARG MODEL=generic
-ARG TRUSTED_BOOT=false
+FROM ${BASE_IMAGE} AS kairos-core
 ARG VERSION
 
 RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
-    /kairos-init -l debug -s install -m "${MODEL}" -t "${TRUSTED_BOOT}" --version "${VERSION}" && \
-    /kairos-init -l debug -s init -m "${MODEL}" -t "${TRUSTED_BOOT}" --version "${VERSION}"
+    /kairos-init -l debug -s install -m "generic" --version "${VERSION}" && \
+    /kairos-init -l debug -s init -m "generic" --version "${VERSION}"
 
+FROM ${BASE_IMAGE} AS kairos-standard
+ARG VERSION
+
+RUN --mount=type=bind,from=kairos-init,src=/kairos-init,dst=/kairos-init \
+    /kairos-init -l debug -s install -m "generic" -k "k0s" --k8sversion "v1.33.4+k0s.0" --version "${VERSION}" && \
+    /kairos-init -l debug -s init -m "generic" -k "k0s" --k8sversion "v1.33.4+k0s.0" --version "${VERSION}"
+
+FROM kairos-core AS core
 # Create local-ai user and group
 RUN useradd -r -s /bin/false -U -m -d /usr/share/local-ai local-ai
 
@@ -46,3 +53,10 @@ RUN touch /etc/localai.env && \
     echo "API_KEY=" >> /etc/localai.env && \
     echo "THREADS=4" >> /etc/localai.env && \
     echo "MODELS_PATH=/usr/share/local-ai/models" >> /etc/localai.env
+
+# Standard variant stage (Kubernetes-based)
+FROM kairos-standard AS standard
+# TODO: Add Kubernetes-specific configuration for standard variant
+# This is where you would add Kubernetes manifests, Helm charts, etc.
+
+FROM ${VARIANT}

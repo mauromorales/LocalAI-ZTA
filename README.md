@@ -61,7 +61,14 @@ Building an appliance is done fully with [Kairos](https://kairos.io), which mean
 First we need a container image, which will be used to create the installation artifacts. The build process uses a two-stage approach:
 
 1. **Stage 1**: Builds the LocalAI base image with the LocalAI binary and dependencies
-2. **Stage 2**: Adds Kairos integration, systemd service configuration, and user setup
+2. **Stage 2**: Adds Kairos integration and variant-specific configuration
+
+### Appliance Variants
+
+LocalAI ZTA supports two variants:
+
+- **Core** (default): A lightweight systemd-based LocalAI installation
+- **Standard**: A full-featured Kubernetes-based LocalAI deployment
 
 Create the image by running:
 
@@ -73,6 +80,7 @@ Create the image by running:
 - `REPOSITORY`: Repository name (default: `localai-zta`)
 - `ARTIFACT_VERSION`: Version tag for the final image (optional, defaults to latest LocalAI release)
 - `LOCALAI_VERSION`: LocalAI version to use (optional, defaults to latest LocalAI release)
+- `VARIANT`: Appliance variant - `core` (systemd) or `standard` (kubernetes) (default: `core`)
 
 **Options:**
 - `--push`: Push the built image to the repository (optional)
@@ -80,8 +88,11 @@ Create the image by running:
 **Examples:**
 
 ```bash
-# Build with latest LocalAI version
+# Build core variant with latest LocalAI version
 ./scripts/build-oci.sh
+
+# Build standard (kubernetes) variant
+VARIANT=standard ./scripts/build-oci.sh
 
 # Build with custom repository, latest version
 REPOSITORY=quay.io/mauromorales/localai-zta ./scripts/build-oci.sh
@@ -89,14 +100,14 @@ REPOSITORY=quay.io/mauromorales/localai-zta ./scripts/build-oci.sh
 # Build with custom repository and artifact version
 REPOSITORY=quay.io/mauromorales/localai-zta ARTIFACT_VERSION=v1.0.0 ./scripts/build-oci.sh
 
-# Build with custom artifact version and specific LocalAI version
-REPOSITORY=quay.io/mauromorales/localai-zta ARTIFACT_VERSION=v1.0.0 LOCALAI_VERSION=v3.6.0 ./scripts/build-oci.sh
+# Build standard variant with custom artifact version and specific LocalAI version
+REPOSITORY=quay.io/mauromorales/localai-zta ARTIFACT_VERSION=v1.0.0 LOCALAI_VERSION=v3.6.0 VARIANT=standard ./scripts/build-oci.sh
 
 # Build and push to custom repository
 REPOSITORY=quay.io/mauromorales/localai-zta ARTIFACT_VERSION=v1.0.0 ./scripts/build-oci.sh --push
 ```
 
-This will produce the image: `quay.io/mauromorales/localai-zta:v1.0.0` which we will need in the next step.
+This will produce the image: `quay.io/mauromorales/localai-zta:v1.0.0_core` (or `v1.0.0_standard` for the standard variant) which we will need in the next step.
 
 ### 2. Build an ISO
 
@@ -113,7 +124,7 @@ An ISO can be created using the following script. You need to pass the previousl
 **Example:**
 
 ```bash
-./scripts/build-iso.sh quay.io/mauromorales/localai-zta:v1.0.0 ./cloud-config.yaml
+./scripts/build-iso.sh quay.io/mauromorales/localai-zta:v1.0.0_core ./cloud-config.yaml
 ```
 
 At this point you need to decide whether you want to add some models and backends to the ISO so they are available in the appliance. This is a good option if your device will not have a good network connection. If you don't need to, then you can simply jump to the flashing a USB step.
