@@ -57,7 +57,7 @@ jobs:
       summary_artifacts: true
       custom_tag_format: "$VERSION_$VARIANT"
       custom_artifact_format: "localai-zta-$VERSION_$VARIANT"
-      custom_job_name_format: "core-stage-2"
+      custom_job_name_format: "core"
       cloud_config: ./cloud-config/core.yaml
       release: true
 
@@ -109,6 +109,6 @@ jobs:
       kubernetes_version: "v1.33.4+k0s.0"
       custom_tag_format: "$VERSION_$VARIANT"
       custom_artifact_format: "localai-zta-$VERSION_$VARIANT"
-      custom_job_name_format: "standard-stage-2"
+      custom_job_name_format: "standard"
       cloud_config: ./cloud-config/standard.yaml
       release: true
