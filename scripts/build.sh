@@ -13,4 +13,4 @@ REPOSITORY=quay.io/mauromorales/localai-zta ARTIFACT_VERSION=v0.0.1 VARIANT=$VAR
 
 # Extend the ISO
 ISO_PATH=$(ls build/*${VARIANT}*v0.0.1*.iso | head -n 1)
-./scripts/extend-iso.sh $ISO_PATH
+IMAGE_VARIANT=$VARIANT ./scripts/extend-iso.sh $ISO_PATH
