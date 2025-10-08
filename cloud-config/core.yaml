@@ -25,10 +25,49 @@ stages:
         enable:
           - avahi-daemon
           - local-ai
+          - nginx
     - name: "Give ownership of models and backends to local-ai user"
       commands:
         - |
           chown -R local-ai:local-ai /usr/share/local-ai/* 2>/dev/null || true
+    - name: "Configure nginx reverse proxy for LocalAI"
+      files:
+        - path: /etc/nginx/sites-available/local-ai
+          permissions: 0644
+          owner: 0
+          group: 0
+          content: |
+            server {
+                listen 80 default_server;
+                listen [::]:80 default_server;
+                
+                server_name _;
+                
+                # Increase client body size for large model uploads
+                client_max_body_size 0;
+                
+                # Increase timeouts for long-running requests
+                proxy_connect_timeout 600s;
+                proxy_send_timeout 600s;
+                proxy_read_timeout 600s;
+                
+                location / {
+                    proxy_pass http://127.0.0.1:8080;
+                    proxy_set_header Host $host;
+                    proxy_set_header X-Real-IP $remote_addr;
+                    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                    proxy_set_header X-Forwarded-Proto $scheme;
+                    
+                    # WebSocket support
+                    proxy_http_version 1.1;
+                    proxy_set_header Upgrade $http_upgrade;
+                    proxy_set_header Connection "upgrade";
+                }
+            }
+    - name: "Enable nginx site and remove default site"
+      commands:
+        - ln -sf /etc/nginx/sites-available/local-ai /etc/nginx/sites-enabled/local-ai
+        - rm -f /etc/nginx/sites-enabled/default
   rootfs:
     - name: "LocalAI persistent mounts"
       environment_file: /run/cos/cos-layout.env

@@ -14,6 +14,7 @@ FROM mdns-packages AS core
 ARG LOCALAI_VERSION=v3.5.4
 RUN apt-get update && apt-get install -y \
     curl \
+    nginx \
     && rm -rf /var/lib/apt/lists/*
 RUN ARCH=$(uname -m) && \
     case "$ARCH" in \
