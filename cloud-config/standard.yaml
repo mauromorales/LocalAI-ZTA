@@ -9,10 +9,15 @@ install:
   grub_options:
     default_menu_entry: "LocalAI"
 
+bind_mounts:
+  - /usr/local/.state/opt-local-ai-models.bind:/opt/local-ai/models
+  - /usr/local/.state/opt-local-ai-backends.bind:/opt/local-ai/backends
+
 bundles:
   - targets:
       - run://quay.io/kairos/community-bundles:kairos-operator_latest
       - run://quay.io/kairos/community-bundles:k9s_latest
+      - run://quay.io/kairos/community-bundles:ingress-nginx_latest
 
 users:
   - name: "admin"
@@ -99,6 +104,117 @@ stages:
       commands:
         - ln -sf /etc/systemd/system/k0s-kubeconfig.path /etc/systemd/system/multi-user.target.wants/k0s-kubeconfig.path
         - ln -sf /etc/systemd/system/k0s-kubeconfig.service /etc/systemd/system/multi-user.target.wants/k0s-kubeconfig.service
+    - name: "Generate k0s one-time restart script"
+      files:
+        - path: /usr/local/bin/k0s-restart-once
+          permissions: 0755
+          owner: 0
+          group: 0
+          content: |
+            #!/bin/sh
+            SENTINEL_FILE="/var/lib/k0s/.restart-completed"
+            
+            echo "Checking if one-time restart has already been performed..."
+            if [ -f "$SENTINEL_FILE" ]; then
+              echo "One-time restart already completed (sentinel file exists), skipping..."
+              exit 0
+            fi
+            
+            echo "Checking if k0scontroller is running and ready..."
+            if ! systemctl is-active --quiet k0scontroller; then
+              echo "k0scontroller is not active, will retry..."
+              exit 1
+            fi
+            
+            echo "k0scontroller is active, checking if it's ready..."
+            # Wait a bit for k0scontroller to fully initialize
+            sleep 10
+            
+            # Check if k0s is responding
+            if ! k0s status >/dev/null 2>&1; then
+              echo "k0s is not responding yet, will retry..."
+              exit 1
+            fi
+            
+            echo "k0scontroller is ready, performing one-time restart..."
+            
+            # Create sentinel file to prevent future restarts
+            mkdir -p "$(dirname "$SENTINEL_FILE")"
+            touch "$SENTINEL_FILE"
+            echo "Sentinel file created: $SENTINEL_FILE"
+            
+            # Restart k0scontroller service
+            echo "Restarting k0scontroller service..."
+            systemctl restart k0scontroller
+            echo "k0scontroller service restarted successfully"
+    - name: "Watch for k0scontroller service changes"
+      files:
+        - path: /etc/systemd/system/k0s-restart-once.path
+          permissions: 0644
+          owner: 0
+          group: 0
+          content: |
+            [Unit]
+            Description=Watch for k0scontroller service changes
+
+            [Path]
+            PathExists=/var/lib/k0s/pki/admin.conf
+
+            [Install]
+            WantedBy=multi-user.target
+    - name: "Call k0s-restart-once script on k0scontroller readiness"
+      files:
+        - path: /etc/systemd/system/k0s-restart-once.service
+          permissions: 0644
+          owner: 0
+          group: 0
+          content: |
+            [Unit]
+            Description=Perform one-time k0scontroller restart
+            After=k0scontroller.service
+
+            [Service]
+            Type=oneshot
+            RemainAfterExit=yes
+            ExecStart=/usr/local/bin/k0s-restart-once
+            Restart=on-failure
+            RestartSec=30s
+            StartLimitInterval=300s
+            StartLimitBurst=10
+
+            [Install]
+            WantedBy=multi-user.target
+    - name: "Enable k0s one-time restart related units"
+      commands:
+        - ln -sf /etc/systemd/system/k0s-restart-once.path /etc/systemd/system/multi-user.target.wants/k0s-restart-once.path
+        - ln -sf /etc/systemd/system/k0s-restart-once.service /etc/systemd/system/multi-user.target.wants/k0s-restart-once.service
+    - name: "Configure NGINX Ingress Controller service for port 8080"
+      files:
+        - path: /var/lib/k0s/manifests/ingress-nginx/ingress-nginx-service.yaml
+          permissions: 0655
+          owner: 0
+          group: 0
+          content: |
+            apiVersion: v1
+            kind: Service
+            metadata:
+              name: ingress-nginx-controller
+              namespace: ingress-nginx
+            spec:
+              type: LoadBalancer
+              ports:
+                - name: http
+                  port: 8080
+                  targetPort: 80
+                  protocol: TCP
+                - name: https
+                  port: 8443
+                  targetPort: 443
+                  protocol: TCP
+              selector:
+                app.kubernetes.io/name: ingress-nginx
+                app.kubernetes.io/instance: ingress-nginx
+                app.kubernetes.io/component: controller
     - name: "Add local-path-provisioner"
       files:
         - path: /var/lib/k0s/manifests/local-path-provisioner/local-path-storage.yaml
@@ -393,8 +509,55 @@ stages:
             spec:
               selector:
                 app: local-ai
-              type: LoadBalancer
+              type: ClusterIP
               ports:
                 - protocol: TCP
                   port: 8080
                   targetPort: 8080
+            ---
+            apiVersion: networking.k8s.io/v1
+            kind: Ingress
+            metadata:
+              name: local-ai-ingress
+              namespace: local-ai
+              annotations:
+                nginx.ingress.kubernetes.io/rewrite-target: /
+                nginx.ingress.kubernetes.io/proxy-body-size: "0"
+                nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+                nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+                nginx.ingress.kubernetes.io/server-alias: "localai.local"
+            spec:
+              ingressClassName: nginx
+              rules:
+                - host: localai.local
+                  http:
+                    paths:
+                      - path: /
+                        pathType: Prefix
+                        backend:
+                          service:
+                            name: local-ai
+                            port:
+                              number: 8080
+
+  rootfs:
+    - name: "LocalAI persistent mounts"
+      environment_file: /run/cos/cos-layout.env
+      environment:
+        CUSTOM_BIND_MOUNTS: "/opt/local-ai/models /opt/local-ai/backends"
+
+  after-install:
+    - name: "Copy LocalAI data to persistent partition"
+      commands:
+        - |
+          if mount | grep /usr/local >/dev/null; then umount /usr/local; fi
+          mount LABEL=COS_PERSISTENT /usr/local || mount $(findfs LABEL=COS_PERSISTENT) /usr/local
+          mkdir -p /usr/local/.state/opt-local-ai-models.bind
+          mkdir -p /usr/local/.state/opt-local-ai-backends.bind
+          [ -d /run/initramfs/live/opt/local-ai/models ] && \
+            cp -rf /run/initramfs/live/opt/local-ai/models/* \
+                   /usr/local/.state/opt-local-ai-models.bind/
+          [ -d /run/initramfs/live/opt/local-ai/backends ] && \
+            cp -rf /run/initramfs/live/opt/local-ai/backends/* \
+                   /usr/local/.state/opt-local-ai-backends.bind/
+          umount /usr/local

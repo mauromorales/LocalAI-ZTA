@@ -1,11 +1,30 @@
 #!/bin/bash
-# Extends an ISO by adding all files from models/ and backends/ directories to /usr/share/local-ai/ using xorriso
+# Extends an ISO by adding all files from models/ and backends/ directories using xorriso
 # Usage: ./extend-iso.sh <input-iso> [output-iso]
+# Environment variable IMAGE_VARIANT can be set to "core" (default) or "standard"
 
 set -e  # Exit on any error
 
+# Set image variant (core or standard), default to core
+IMAGE_VARIANT=${IMAGE_VARIANT:-core}
+
 INPUT_ISO=$1
 OUTPUT_ISO=$2
+
+# Validate image variant
+if [ "$IMAGE_VARIANT" != "core" ] && [ "$IMAGE_VARIANT" != "standard" ]; then
+    echo "Error: IMAGE_VARIANT must be 'core' or 'standard', got: $IMAGE_VARIANT"
+    exit 1
+fi
+
+# Set target paths based on image variant
+if [ "$IMAGE_VARIANT" = "core" ]; then
+    MODELS_TARGET_PATH="/usr/share/local-ai/models"
+    BACKENDS_TARGET_PATH="/usr/share/local-ai/backends"
+else
+    MODELS_TARGET_PATH="/opt/local-ai/models"
+    BACKENDS_TARGET_PATH="/opt/local-ai/backends"
+fi
 
 # Validate arguments
 if [ -z "$INPUT_ISO" ]; then
@@ -22,9 +41,14 @@ fi
 
 # Set default output ISO name if not provided
 if [ -z "$OUTPUT_ISO" ]; then
-    # Extract filename without extension and add -extended
+    # Extract filename without extension
     BASENAME=$(basename "$INPUT_ISO" .iso)
-    OUTPUT_ISO="build/${BASENAME}-extended.iso"
+    # Only add -extended if it's not already in the filename
+    if [[ "$BASENAME" == *"-extended" ]]; then
+        OUTPUT_ISO="build/${BASENAME}.iso"
+    else
+        OUTPUT_ISO="build/${BASENAME}-extended.iso"
+    fi
 fi
 
 # Ensure build directory exists
@@ -68,8 +92,9 @@ fi
 
 echo "Extending ISO: $INPUT_ISO"
 echo "Output ISO: $OUTPUT_ISO"
-echo "Adding all files from $MODELS_DIR/ to /usr/share/local-ai/models/"
-echo "Adding all files from $BACKENDS_DIR/ to /usr/share/local-ai/backends/"
+echo "Image variant: $IMAGE_VARIANT"
+echo "Adding all files from $MODELS_DIR/ to $MODELS_TARGET_PATH/"
+echo "Adding all files from $BACKENDS_DIR/ to $BACKENDS_TARGET_PATH/"
 
 # Build xorriso command with all files in models directory
 # Use the same approach as AuroraBoot to preserve boot information
@@ -81,7 +106,7 @@ echo "  Models:"
 while IFS= read -r -d '' file; do
     # Get relative path from models directory
     rel_path="${file#$MODELS_DIR/}"
-    target_path="/usr/share/local-ai/models/$rel_path"
+    target_path="$MODELS_TARGET_PATH/$rel_path"
     
     echo "    - $target_path"
     XORRISO_CMD="$XORRISO_CMD -map \"$file\" \"$target_path\""
@@ -92,7 +117,7 @@ echo "  Backends:"
 while IFS= read -r -d '' file; do
     # Get relative path from backends directory
     rel_path="${file#$BACKENDS_DIR/}"
-    target_path="/usr/share/local-ai/backends/$rel_path"
+    target_path="$BACKENDS_TARGET_PATH/$rel_path"
     
     echo "    - $target_path"
     XORRISO_CMD="$XORRISO_CMD -map \"$file\" \"$target_path\""
