@@ -55,8 +55,8 @@ jobs:
       registry_namespace: "mauromorales"
       registry_repository: "localai-zta"
       summary_artifacts: true
-      custom_tag_format: "$VERSION_$VARIANT"
-      custom_artifact_format: "localai-zta-$VERSION_$VARIANT"
+      custom_tag_format: "${VERSION}_${VARIANT}"
+      custom_artifact_format: "localai-zta-${VERSION}_${VARIANT}"
       custom_job_name_format: "core"
       cloud_config: ./cloud-config/core.yaml
       release: true
@@ -107,8 +107,8 @@ jobs:
       summary_artifacts: true
       kubernetes_distro: "k0s"
       kubernetes_version: "v1.33.4+k0s.0"
-      custom_tag_format: "$VERSION_$VARIANT"
-      custom_artifact_format: "localai-zta-$VERSION_$VARIANT"
+      custom_tag_format: "${VERSION}_${VARIANT}"
+      custom_artifact_format: "localai-zta-${VERSION}_${VARIANT}"
       custom_job_name_format: "standard"
       cloud_config: ./cloud-config/standard.yaml
       release: true
